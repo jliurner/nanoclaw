@@ -58,24 +58,28 @@ This removes the **installed block only**. It does not touch the user's memory, 
 
 **Only run this on an explicit full uninstall, or when you have just removed the pack from the *last* group that used it.** Knowledge Inventory lives at `container/skills/knowledge-inventory/`, which is repo-level: deleting it removes the tip from **every** agent group in this fork at once. If any other group still has the pack, stop here — Part A was enough.
 
-## 1. Delete the skill directory
+## 1. Delete the skill and its content test
 
-Skip-if-absent — idempotent by construction, so a second run is a clean no-op.
+Step 5b copied in two files from the `adoption-companion` branch — the tip and the content test that travels with it. Both go. Skip-if-absent — idempotent by construction, so a second run is a clean no-op.
 
 ```bash
 if [ -d container/skills/knowledge-inventory ]; then
   rm -rf container/skills/knowledge-inventory
+  rm -f container/knowledge-inventory.skill.test.ts
   echo "knowledge-inventory: removed"
 else
   echo "knowledge-inventory: already absent — skipping"
 fi
 ```
 
-Verify it's gone:
+Verify both are gone:
 
 ```bash
-test -d container/skills/knowledge-inventory && echo "STILL PRESENT" || echo "gone"
+test -d container/skills/knowledge-inventory && echo "STILL PRESENT" || echo "skill: gone"
+test -f container/knowledge-inventory.skill.test.ts && echo "STILL PRESENT" || echo "test: gone"
 ```
+
+Removal sticks: trunk never carried these files, so no update brings them back. Reinstalling is re-running `/add-adoption-companion`, which re-copies from the branch.
 
 ## 2. Restart the groups
 

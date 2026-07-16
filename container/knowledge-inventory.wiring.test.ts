@@ -1,130 +1,24 @@
 import { describe, it, expect } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-// Wiring guards for the Knowledge Inventory companion tip. The feature is zero
-// runtime code — a container skill's prose plus the existing send_file /
-// send_message tools — so there is no helper to unit-test. These read the
-// shipped artifacts and assert the invariants the spec pins down (the same
-// idiom as container/agent-runner/src/memory/scaffold.wiring.test.ts): the
-// skill's trigger contract, its guard, its no-jargon rule, and the pack's
-// two-scope install/remove wiring.
+// Install/remove wiring guards for the Knowledge Inventory companion tip.
+//
+// The tip itself is NOT in trunk — it lives on the `adoption-companion` branch
+// and /add-adoption-companion copies it in (the `channels`/slack-formatting
+// topology). Its content invariants therefore travel with it, in
+// container/knowledge-inventory.skill.test.ts on that branch; there would be
+// nothing to read here. What trunk owns, and what this file guards, is the
+// pack's two-scope install/remove wiring and the core behavior that wiring
+// depends on.
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
-const SKILL_PATH = 'container/skills/knowledge-inventory/SKILL.md';
 const PACK = '.claude/skills/add-adoption-companion';
+const BRANCH = 'adoption-companion';
 
-const skill = readFileSync(join(repoRoot, SKILL_PATH), 'utf8');
 const installer = readFileSync(join(repoRoot, PACK, 'SKILL.md'), 'utf8');
 const remove = readFileSync(join(repoRoot, PACK, 'REMOVE.md'), 'utf8');
-
-// Terms that describe storage internals. Fine in behavioral prose (the agent
-// has to be told what to read); never in a string the user is shown.
-const JARGON = [
-  'memory/',
-  'index.md',
-  'concept file',
-  'OKF',
-  'entity type',
-  'frontmatter',
-  'Core Memory',
-  'CLAUDE.local.md',
-  '/workspace',
-  // Added after a live eval: an agent said "my memory's still just the empty
-  // scaffold" on an empty group. Not in the spec's blocklist, but it is
-  // storage vocabulary reaching the user. See evals/knowledge-inventory/RESULTS.md.
-  'scaffold',
-];
-
-/** Example output = a ```text example-output fence. Those are shown to users. */
-function exampleOutputs(md: string): string[] {
-  return [...md.matchAll(/```text example-output\n([\s\S]*?)```/g)].map((m) => m[1]);
-}
-
-// ---------------------------------------------------------------------------
-// A1 — SKILL.md invariants
-// ---------------------------------------------------------------------------
-describe('A1 — knowledge-inventory SKILL.md', () => {
-  const frontmatter = skill.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? '';
-
-  it('A1.1 has frontmatter with the right name and a description', () => {
-    expect(frontmatter).toMatch(/^name: knowledge-inventory$/m);
-    expect(frontmatter).toMatch(/^description: \S.+/m);
-  });
-
-  it('A1.2 description names the reactive triggers (this is what model-invokes it)', () => {
-    const description = frontmatter.match(/^description: (.+)$/m)?.[1] ?? '';
-    for (const trigger of ['what you know', 'remember', 'track']) {
-      expect(description.toLowerCase()).toContain(trigger);
-    }
-  });
-
-  it('A1.3 guards on the active store and degrades honestly', () => {
-    expect(skill).toContain('memory/index.md');
-    // Forward-to-operator phrasing, never "run this yourself".
-    expect(skill).toMatch(/forward|pass this to whoever set me up/i);
-    expect(skill).toMatch(/do \*\*not\*\* improvise|do not improvise/i);
-  });
-
-  it('A1.4 reads Core Memory + walks folder indexes, and counts rather than invents', () => {
-    expect(skill).toMatch(/Core Memory/);
-    expect(skill).toMatch(/walk the folder .*index\.md/i);
-    expect(skill).toMatch(/count.*from the folders/i);
-    expect(skill).toMatch(/never estimate, round, or infer/i);
-  });
-
-  it('A1.5 carries the translation rules and the no-jargon rule', () => {
-    expect(skill).toMatch(/About you/);
-    expect(skill).toMatch(/user's (vocabulary|words)/i);
-    expect(skill).toMatch(/Your customers — 12/);
-    // The no-jargon rule must enumerate the blocklist for the agent.
-    expect(skill).toMatch(/Never say, in any surface/i);
-    for (const term of ['concept file', 'OKF', 'entity type', 'frontmatter']) {
-      expect(skill).toContain(term);
-    }
-  });
-
-  it('A1.5b states no-jargon as a principle, not just a word list', () => {
-    // Regression: "scaffold" leaked past an enumerated blocklist on a live run,
-    // because a list can only ban words someone thought of. The skill must
-    // carry the generative rule too.
-    expect(skill).toMatch(/list is examples, not the whole rule/i);
-    expect(skill).toMatch(/no word that describes how your memory is built/i);
-    expect(skill).toContain('scaffold');
-  });
-
-  it('A1.5c requires every mapped folder to be reported, except system/', () => {
-    // Regression: a live run silently dropped an operational folder (context/)
-    // from the inventory. Spec §2 says report the categories the map points at;
-    // system/ (the memory's own definition) is the one legitimate exclusion.
-    expect(skill).toMatch(/Report every folder the map points at/i);
-    expect(skill).toMatch(/system\//);
-    expect(skill).toMatch(/[Dd]on't silently drop a category/);
-  });
-
-  it('A1.6 names both rendering surfaces', () => {
-    expect(skill).toContain('send_file');
-    expect(skill).toMatch(/self-contained/i);
-    expect(skill).toMatch(/no external (stylesheets|assets)/i);
-    expect(skill).toContain('send_message');
-    expect(skill).toMatch(/plain text.*always available/i);
-  });
-
-  it('A1.7 offers control (add / fix / stop tracking)', () => {
-    expect(skill).toMatch(/add something, fix anything, or stop tracking/i);
-    expect(skill).toContain('system/definition.md');
-  });
-
-  it('A1.8 no jargon in user-facing example strings', () => {
-    const examples = exampleOutputs(skill);
-    expect(examples.length).toBeGreaterThan(0);
-    for (const example of examples) {
-      for (const term of JARGON) {
-        expect(example).not.toContain(term);
-      }
-    }
-  });
-});
 
 // ---------------------------------------------------------------------------
 // A2 — Pack install / remove wiring
@@ -134,7 +28,7 @@ describe('A2 — pack install/remove wiring', () => {
     expect(installer).toMatch(/fork-level/i);
     // guard → ensure present → activate → report
     expect(installer).toMatch(/### 5a — Guard/);
-    expect(installer).toMatch(/### 5b — Ensure the skill directory is present/);
+    expect(installer).toMatch(/### 5b — Copy the skill in from the `adoption-companion` branch/);
     expect(installer).toMatch(/### 5c — Activate/);
     expect(installer).toMatch(/blast radius/i);
   });
@@ -174,11 +68,28 @@ describe('A2 — pack install/remove wiring', () => {
     expect(forkSection).toMatch(/\/migrate-memory/);
   });
 
-  it('A2.3 install is idempotent by construction (present → confirm, absent → restore)', () => {
-    expect(installer).toMatch(/if \[ -f container\/skills\/knowledge-inventory\/SKILL\.md \]/);
-    expect(installer).toMatch(/already present/);
-    // Restore-from-git is what makes a post-uninstall re-install work.
-    expect(installer).toMatch(/git show HEAD:container\/skills\/knowledge-inventory\/SKILL\.md/);
+  it('A2.3 install copies from the branch, not from the fork s own history', () => {
+    // Reading the payload from HEAD made re-install depend on the user's trunk
+    // state: after Part B removed the file and the operator committed that,
+    // `git show HEAD:<path>` had nothing to read. The branch is independent of
+    // trunk, so this holds no matter what the fork's history looks like.
+    expect(installer).toMatch(/git fetch "\$REMOTE" "\$BRANCH"/);
+    expect(installer).toMatch(/BRANCH=adoption-companion/);
+    expect(installer).not.toMatch(/git show HEAD:/);
+  });
+
+  it('A2.3b install writes via a temp path, so a failed fetch cannot truncate', () => {
+    // `git show <bad-ref> > dest` leaves a 0-byte dest: the shell creates the
+    // file before git runs and fails. A 0-byte SKILL.md is a skill that never
+    // loads, and the old `-f` guard then reported it as already installed.
+    expect(installer).toMatch(/> "\$p\.tmp" && mv "\$p\.tmp" "\$p"/);
+  });
+
+  it('A2.3c the remote resolver does not hardcode origin', () => {
+    // A fork clone carries the branch on origin, but a checkout with an
+    // upstream remote does not — resolve by which remote actually has it.
+    expect(installer).toMatch(/git ls-remote --heads "\$r" "\$BRANCH"/);
+    expect(installer).toMatch(/NANOCLAW_CHANNELS_REMOTE/);
   });
 
   it('A2.4 only the fork-level remove path deletes the skill dir', () => {
@@ -195,16 +106,45 @@ describe('A2 — pack install/remove wiring', () => {
     expect(partB).toMatch(/explicit full uninstall|last\*{0,2} group/i);
   });
 
-  it('A2.5 paths in the installer match the skill s actual location (no drift)', () => {
-    expect(existsSync(join(repoRoot, SKILL_PATH))).toBe(true);
-    expect(installer).toContain('container/skills/knowledge-inventory');
-    expect(remove).toContain('container/skills/knowledge-inventory');
+  it('A2.5 install and remove name the same paths (no drift between the two)', () => {
+    for (const doc of [installer, remove]) {
+      expect(doc).toContain('container/skills/knowledge-inventory');
+      expect(doc).toContain('container/knowledge-inventory.skill.test.ts');
+    }
+  });
+
+  it('A2.5b trunk does not ship the tip — the branch is what carries it', () => {
+    // If this file ever reappears in trunk, the install step becomes a no-op
+    // and the tip goes live fork-wide at merge, with no one opting in. That is
+    // the state this whole topology exists to prevent, so it is worth a guard.
+    expect(existsSync(join(repoRoot, 'container/skills/knowledge-inventory'))).toBe(false);
+  });
+
+  it('A2.5c the branch actually carries every path the installer copies', () => {
+    // Real drift protection: the installer names paths on a branch nothing in
+    // trunk can typecheck. Only runs where the ref is available (it is not in a
+    // fresh shallow clone), so a missing branch skips rather than fails red.
+    const ref = [`${BRANCH}`, `fork/${BRANCH}`, `origin/${BRANCH}`].find((r) => {
+      try {
+        execFileSync('git', ['rev-parse', '--verify', '--quiet', r], { cwd: repoRoot, stdio: 'pipe' });
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    if (!ref) return; // branch not fetched here — nothing to check against
+
+    for (const p of ['container/skills/knowledge-inventory/SKILL.md', 'container/knowledge-inventory.skill.test.ts']) {
+      expect(installer).toContain(p);
+      const blob = execFileSync('git', ['cat-file', '-p', `${ref}:${p}`], { cwd: repoRoot, stdio: 'pipe' }).toString();
+      expect(blob.length).toBeGreaterThan(0);
+    }
   });
 
   it('A2.6 the skill has exactly one canonical copy (no hand-maintained mirror)', () => {
     // docs/skill-guidelines.md anti-pattern #9: a mirror kept in sync by hand
-    // drifts. The tracked file IS the source; install restores it from git
-    // (the add-slack idiom), so there is no second copy to guard.
+    // drifts. The branch IS the source and install copies from it (the
+    // add-slack idiom), so there is no second copy to guard.
     expect(existsSync(join(repoRoot, PACK, 'assets'))).toBe(false);
     expect(installer).not.toMatch(/cp .*assets.*knowledge-inventory/);
   });
