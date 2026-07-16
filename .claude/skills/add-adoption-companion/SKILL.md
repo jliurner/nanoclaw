@@ -33,27 +33,16 @@ ncl groups list
 
 Note the group's folder under `groups/` (e.g. `groups/my-assistant/`).
 
-**Install on the user-facing assistant group as-is — any session mode works.** Receipts read two per-group files that core loads at **every** session start regardless of session mode: the group's Core Memory (`memory/index.md`) and the block's `Receipts: ON/OFF` line. So saving, dedup of already-known facts, the toggle, and per-turn batching hold even when each message lands in its own session (a threaded channel), and the block tells the agent to engage-and-save on the first message of a session rather than cold-greet. Keep the group's existing channel wiring.
-
-**Optional — cross-turn continuity.** If you *also* want the agent to carry conversational context across turns (unrelated to receipts — e.g. resolving "forget that" against the previous message rather than only against memory), give the group a single continuous session. This is a channel-wiring choice, not a receipts requirement:
-
-```bash
-ncl wirings list                                          # note the wiring id
-ncl wirings update <wiring-id> --threads 0                # channel replies un-threaded; shared session applies
-# or, to keep threaded replies on a single-channel assistant:
-ncl wirings update <wiring-id> --session-mode agent-shared
-```
-
-(A 1:1 DM, `is_group=0`, is continuous automatically.) Background on why a threaded channel otherwise fragments sessions: `src/router.ts` upgrades a group chat with threading on to `per-thread` regardless of the wiring's `session_mode`. Leaving it fragmented is fine for receipts.
+**Install on the group as-is — any session mode works, so keep the existing channel wiring.** Receipts read two per-group files that core loads at every session start regardless of session mode: the group's Core Memory (`memory/index.md`) and the block's `Receipts: ON/OFF` line. Saving, dedup, the toggle, and per-turn batching all hold even when each message lands in its own session.
 
 ## Step 2 — Guard: confirm the group is on the new memory model
 
-These features require the post-#3012 memory model, proven by **two** conditions — check **both**:
+These features read the group's memory tree, so the group must be on the shared-memory model. Two conditions prove it — check **both**:
 
 ```bash
 GROUP=<group-folder>          # the folder name from `ncl groups list`
 
-# (a) UPDATED: the memory scaffold exists (auto-created on first boot post-#3012)
+# (a) UPDATED: the memory scaffold exists (auto-created on first boot)
 test -f "groups/$GROUP/memory/index.md" && echo "index.md: present" || echo "index.md: MISSING"
 
 # (b) MIGRATED: no durable content stranded in a legacy CLAUDE.local.md
@@ -101,9 +90,7 @@ ncl groups restart --id <group-id>
 
 ## Step 5 — Fork-level: install the Knowledge Inventory tip (once per fork)
 
-The pack has **two install scopes**. Steps 1–4 above are **per-group** (Memory Receipts is a standing block in one group's persona). This step is **fork-level**: Knowledge Inventory is a container skill under `container/skills/`, which is repo-level — writing it makes it available to **every** agent group in this fork at once. Run it once per fork; it is idempotent, so running it again on a later per-group install is a no-op.
-
-Knowledge Inventory is **reactive**: when the user asks *"what do you know about me?"*, the agent shows a plain-language picture of what it tracks — categories, counts, a few examples — and offers to add, fix, or stop tracking anything. It has **no toggle**: a feature that only ever answers when asked can't bother anyone, so fork-wide availability is intentional and safe (it only ever reveals that agent's own memory).
+Run this once per fork — it makes Knowledge Inventory available to **every** agent group at once. Idempotent, so running it again during a later per-group install is a no-op.
 
 ### 5a — Guard
 
@@ -143,11 +130,7 @@ Git is the single source for this file. An update is `git show HEAD:<path> > <pa
 ncl groups restart --id <group-id>
 ```
 
-Restart is sufficient because activation is resolved entirely at spawn: `container/skills/` is bind-mounted read-only at `/app/skills` (`src/container-runner.ts:342-344`), and skill selection defaults to `"all"` (`src/db/migrations/014-container-configs.ts:17`), which `selectedSkillNames()` recomputes from the directory listing on every spawn (`src/container-runner.ts:420-431`) — so a newly added directory is discovered and symlinked into the group's skills dir automatically.
-
-**One caveat — explicit skill lists.** `selectedSkillNames()` only rescans the directory when a group's skill selection is `"all"`; an explicit array is returned verbatim (`src/container-runner.ts:420-431`). So a group pinning a list never gets a symlink for the new skill and **silently** never invokes it — the files are mounted, but invisible to the agent.
-
-This is rare: the column defaults to `"all"` and no `ncl` verb sets it otherwise (`config update` is scalars only). The one path that produces an explicit list is `src/backfill-container-configs.ts:62`, migrating a **legacy v1 `container.json`** that hand-picked skills. A fresh v2 group can't be in this state — check anyway if this fork came from v1:
+**One caveat — explicit skill lists.** A group whose skill selection is an explicit array instead of `"all"` never gets a symlink for the new skill: the files are mounted but the agent never sees them, **silently**. Only v1-migrated groups can be in this state, but the check is one command:
 
 ```bash
 ncl groups config get --id <group-id> | grep -i skills   # "all" → nothing to do
@@ -226,5 +209,5 @@ writeFileSync(f, applyReceiptsBlock(readFileSync(f, 'utf8'), { version: 1 }));
 " "$TPL"
 ```
 
-**Caveats:** (1) only agents created **via that template** (`ncl groups create --template …`) inherit it — not ones made by `/init-first-agent` or the setup wizard. (2) It blankets **every** agent from that template, so only add it to a **user-facing/assistant** template, never a generic or Builder one (spec #150). (3) It ships `OFF`, same as a direct install.
+**Caveats:** (1) only agents created **via that template** (`ncl groups create --template …`) inherit it — not ones made by `/init-first-agent` or the setup wizard. (2) It blankets **every** agent from that template, so only add it to a **user-facing/assistant** template, never a generic or Builder one. (3) It ships `OFF`, same as a direct install.
 

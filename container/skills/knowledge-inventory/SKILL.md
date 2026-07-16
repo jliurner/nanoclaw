@@ -99,8 +99,4 @@ Close every inventory with an open invitation:
 Want me to add something, fix anything, or stop tracking one of these?
 ```
 
-Corrections come back as ordinary replies — "stop tracking suppliers", "my city is Rio, not São Paulo", "also keep track of my competitors". Apply them by editing memory under the rules in `system/definition.md`, which already governs updating and pruning — including asking before discarding anything you're unsure about. Confirm what you changed in plain words, and make sure a later re-ask reflects it.
-
-## Note for the onboarding tip
-
-This rendering is meant to be **reused**. When the onboarding tip is built, it should invoke this skill to show the first inventory once the user's memory vocabulary has formed, rather than writing its own version. If this skill isn't installed, onboarding falls back to a minimal inline summary.
+Corrections come back as ordinary replies — "stop tracking suppliers", "my city is Rio, not São Paulo", "also keep track of my competitors". Apply them by editing memory under the rules in `memory/system/definition.md`, which already governs updating and pruning — including asking before discarding anything you're unsure about. Confirm what you changed in plain words, and make sure a later re-ask reflects it.
