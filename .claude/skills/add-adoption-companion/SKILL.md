@@ -106,21 +106,35 @@ if [ -s "groups/$GROUP/CLAUDE.local.md" ]; then echo "CLAUDE.local.md: residual 
 
 > *"This group isn't on NanoClaw's new memory system yet. Run **update** + **`/migrate-memory`** for it first, then re-run `/add-adoption-companion`."*
 
-### 5b — Ensure the skill directory is present
+### 5b — Copy the skill in from the `adoption-companion` branch
 
-`container/skills/knowledge-inventory/SKILL.md` is the canonical copy and ships with this fork, so on a normal install it is already in place and this step confirms it. Restore it from git when it is absent — a fork-level uninstall (`REMOVE.md` Part B) deletes it, and this is the path that brings it back. Idempotent: present → confirm and move on; absent → restore.
+Trunk does not ship this skill. The `adoption-companion` branch is canonical, and this step copies the tip and its content test into the fork — the same shape as `/add-slack` fetching `slack-formatting` from the `channels` branch. Without this copy step, no agent has the tip.
+
+Resolve the remote that carries the branch first: a fork clone has it on `origin`, but a checkout with an upstream remote may have it elsewhere. Set `NANOCLAW_CHANNELS_REMOTE` to override.
 
 ```bash
-if [ -f container/skills/knowledge-inventory/SKILL.md ]; then
-  echo "knowledge-inventory: already present"
-else
-  mkdir -p container/skills/knowledge-inventory
-  git show HEAD:container/skills/knowledge-inventory/SKILL.md > container/skills/knowledge-inventory/SKILL.md
-  echo "knowledge-inventory: restored"
+BRANCH=adoption-companion
+REMOTE="${NANOCLAW_CHANNELS_REMOTE:-}"
+if [ -z "$REMOTE" ]; then
+  for r in $(git remote); do
+    if git ls-remote --heads "$r" "$BRANCH" | grep -q .; then REMOTE="$r"; break; fi
+  done
 fi
+REMOTE="${REMOTE:-origin}"
+git fetch "$REMOTE" "$BRANCH"
 ```
 
-Git is the single source for this file. An update is `git show HEAD:<path> > <path>` again — the tracked copy is canonical, there is no second copy to keep in sync, and no per-user state to preserve.
+Copy each file through a temp path so a failed `git show` can never leave a truncated file behind — a bare `> dest` redirect creates an empty file *before* git runs, and an empty `SKILL.md` is a skill that silently never loads:
+
+```bash
+for p in container/skills/knowledge-inventory/SKILL.md container/knowledge-inventory.skill.test.ts; do
+  mkdir -p "$(dirname "$p")"
+  git show "$REMOTE/$BRANCH:$p" > "$p.tmp" && mv "$p.tmp" "$p" || { rm -f "$p.tmp"; echo "FAILED: $p"; exit 1; }
+done
+echo "knowledge-inventory: installed"
+```
+
+Overwriting is intentional and makes this idempotent — the branch is canonical, so re-running is how you take an update. The content test travels with the skill: it reads the shipped `SKILL.md`, so it only runs where the tip is installed.
 
 ### 5c — Activate: restart the group
 
