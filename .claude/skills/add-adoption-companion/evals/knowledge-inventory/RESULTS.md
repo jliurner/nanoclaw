@@ -31,7 +31,7 @@ Each guard was mutation-tested (deliberately break it → red), not just observe
 assistant), wired to the local **CLI channel** (`pnpm run chat`, no Slack). Observables read
 from the session `outbound.db` (`send_file` vs plain `chat` rows), the on-disk `memory/` tree
 before/after, and the authored HTML. Groups, wirings, containers, and session dirs deleted
-after the run; the real assistants' memory was never touched.
+after the run. B.3 below then drove the install's own agents directly — see its note.
 
 > **Harness note.** Fixtures must be seeded **before the group's first boot**. `memory/index.md`
 > is injected when a context window is created, so seeding mid-session leaves the agent
@@ -62,9 +62,9 @@ after the run; the real assistants' memory was never touched.
 
 | Group | Memory | Observed | ✓ |
 |---|---|---|---|
-| Nano (`my-assistant`) | 1 core fact, `context/` (1) | accurate on the core fact; **omitted the `context/` folder** (see finding 2) | ⚠️ |
-| pm | empty scaffold | honest, no fabrication; wording nit (finding 3) | ✅ |
-| home-agent / fitness-agent | empty scaffold | identical state to pm — not separately driven | — |
+| personal assistant | 1 core fact, `context/` (1) | accurate on the core fact; **omitted the `context/` folder** (see finding 2) | ⚠️ |
+| PM agent | empty scaffold | honest, no fabrication; wording nit (finding 3) | ✅ |
+| home + fitness agents | empty scaffold | identical state to the PM agent — not separately driven | — |
 
 ### B.3 — k=3 against real populated agents (post-fix)
 
@@ -75,16 +75,16 @@ Every run used a **fresh context** and was scored from `outbound.db`.
 
 | Group | Memory (answer key) | Runs | HTML | Result |
 |---|---|---|---|---|
-| Nano | `context/` 3 (owner, team-notes, companion-agents) | k=3 | ✅ | **3/3** — all three categories reported every run, incl. the operational folder that finding 2 fixed |
-| pm | `roadmap/` 5, `vendors/` 6 | k=3 | ✅ | **3/3** — counts exact every run; empty areas (interviews, tasks) reported honestly, never padded |
-| home-agent | `people/` 3, `recipes/` 7 | k=1 | text only | ✅ exact; also surfaced real pre-existing data (entries the seed never mentioned) |
-| fitness-agent | `people/` 2 + workouts/meals/metrics/world-cup | k=1 | ✅ | ✅ exact; `send_file` HTML + text, both jargon-free |
+| personal assistant | `context/` 3 (owner profile, team, companion-agents) | k=3 | ✅ | **3/3** — all three categories reported every run, incl. the operational folder that finding 2 fixed |
+| PM agent | `roadmap/` 5, `vendors/` 6 | k=3 | ✅ | **3/3** — counts exact every run; empty areas (interviews, tasks) reported honestly, never padded |
+| home agent | `people/` 3, `recipes/` 7 | k=1 | text only | ✅ exact; also surfaced pre-existing entries the seed never mentioned |
+| fitness agent | `people/` 2 + workouts/meals/metrics/world-cup | k=1 | ✅ | ✅ exact; `send_file` HTML + text, both jargon-free |
 
 All four HTML files (F1 fixture + 3 live agents) are self-contained: **zero** external asset
 references, no blocklist token in visible content, `viewport` meta present, system font stack.
 
 **Finding 4 — rendering is persona-sensitive, not just channel-sensitive (not a defect).**
-Three of four agents built the HTML infographic; **home-agent sent text only**. Its persona says
+Three of four agents built the HTML infographic; **the home agent sent text only**. Its persona says
 *"Keep replies short and practical — this is a family group chat, not a project channel."*
 The agent let that outrank the skill's preference for the richer surface, and its text answer
 was complete, accurate, jargon-free and closed with the control offer. That is the right call —
@@ -93,7 +93,7 @@ universal floor. Worth knowing when reading eval output: absence of `send_file` 
 automatically a rendering failure; check the group's persona before scoring it as one.
 
 **Fix verification (behavioral, not just static):**
-- **Finding 2 (dropped category) — fixed.** Nano previously omitted `context/`. All 3 post-fix
+- **Finding 2 (dropped category) — fixed.** The personal assistant previously omitted `context/`. All 3 post-fix
   runs report *"Companion agents — 2"*. `system/` stays correctly excluded.
 - **Finding 3 ("scaffold") — fixed.** A fresh empty group now says *"Honestly, not much yet —
   I haven't picked up anything about you so far"*, with no storage vocabulary.
@@ -104,11 +104,11 @@ automatically a rendering failure; check the group's persona before scoring it a
    so the "index absent" branch is unreachable in practice (same root cause as Memory Receipts'
    B26). The guard still fired — because the **residual `CLAUDE.local.md`** condition caught it.
    This is the concrete evidence that the two checks in general.md §5 are not redundant.
-2. **Folder categories that aren't "about the user" get dropped.** On Nano's real memory the
+2. **Folder categories that aren't "about the user" get dropped.** On the personal assistant's real memory, the
    inventory reported the About-you fact but omitted `context/` (an agent-operational registry
    of companion agents). Defensible UX — the user doesn't care about that registry — but spec §2
    says report the categories the Map points at. Wording call, not a bug. Not fabrication.
-3. **"Scaffold" leaks.** pm said *"my memory's still just the empty scaffold."* Not a blocklist
+3. **"Scaffold" leaks.** The PM agent said *"my memory's still just the empty scaffold."* Not a blocklist
    token, so KI05 passes strictly, but it is storage vocabulary reaching the user. A one-line
    `SKILL.md` wording fix if it recurs.
 
@@ -132,7 +132,7 @@ automatically a rendering failure; check the group's persona before scoring it a
   Bar met for these two categories on the phrasings driven.
 - **B — KI12 guard:** k=1 only. Reproducing it costs a purpose-built not-migrated group;
   not re-run after the fixes (the guard prose was untouched by them).
-- **B — accuracy / tone:** k=3 on Nano and pm (6/6 exact counts), k=1 elsewhere. Bar met on
+- **B — accuracy / tone:** k=3 on the personal assistant and pm (6/6 exact counts), k=1 elsewhere. Bar met on
   what was driven.
 - **B — trigger precision:** k=1. KI17 (Roman Empire) did not fire; KI16 phrasings fired.
 
@@ -142,7 +142,7 @@ the file-less channel path are still k=1, and KI03/KI08 were never isolated (see
 
 ### A scoring error worth recording
 
-pm r2 was first scored a **fail** — accurate counts but no control offer. It was a **harness
+the PM agent's r2 was first scored a **fail** — accurate counts but no control offer. It was a **harness
 artifact**: `scripts/chat.ts` exits 2s after the *first* reply, and the agent had sent a short
 lead-in followed by the full inventory plus a file. The CLI showed only the lead-in. `outbound.db`
 seq 17 held the complete answer, control offer included.

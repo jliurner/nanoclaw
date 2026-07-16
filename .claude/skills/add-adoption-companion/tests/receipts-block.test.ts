@@ -215,8 +215,18 @@ describe('A3 — skill wiring', () => {
     expect(remove.toLowerCase()).toMatch(/skip|idempotent|already gone|absent/);
   });
 
-  it('A3.5 an "Integration tests" note is present', () => {
-    expect(skill).toContain('Integration tests');
+  it('A3.5 SKILL.md documents every tip the pack ships, and each one\'s scope', () => {
+    // The pack accretes tips. Its header went stale the first time that
+    // happened: the description still said "ships with the Memory Receipts
+    // tip" after Knowledge Inventory landed, and called the install
+    // per-group when the new tip is fork-wide. The description is what
+    // decides when the skill is invoked and what a user thinks they get, so
+    // adding a tip must update it. Add the new tip's name here when you add one.
+    for (const tip of ['Memory Receipts', 'Knowledge Inventory']) {
+      expect(skill).toContain(tip);
+    }
+    expect(skill).toMatch(/per agent group|one agent group/i);
+    expect(skill).toMatch(/every group in the fork|fork-level/i);
   });
 
   it('A3.6 marker strings in SKILL.md/REMOVE.md match the template exactly', () => {

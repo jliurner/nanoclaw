@@ -1,25 +1,27 @@
 ---
 name: add-adoption-companion
-description: Install the Adoption Companion pack into an agent group — a growing bundle of opt-in "companion tips" that help a user adopt and kickstart the assistant. Ships with the Memory Receipts tip (a light "📝 Noted" when the agent learns a durable fact). Opt-in, off by default, reversible.
+description: Install the Adoption Companion pack — a growing bundle of opt-in "companion tips" that help a user adopt and kickstart their assistant. Ships two tips. Memory Receipts drops a light "📝 Noted" when the agent learns a durable fact, per agent group, off until the user asks for it. Knowledge Inventory answers "what do you know about me?" with a plain-language picture of what the agent tracks, available to every group. Zero runtime code, reversible.
 ---
 
 # Add Adoption Companion pack
 
-Installs the **Adoption Companion** pack into one agent group's standing instructions. The pack is a growing bundle of small, opt-in **companion tips** that help a user adopt and kickstart their assistant. It ships today with its first tip — **Memory Receipts**: when the agent saves a new, meaningful durable fact about the user, it drops a glanceable `📝 Noted` message so the user *sees* it learn and can correct it in plain chat. More companion tips get added to the same pack over time; each is self-contained and independently toggleable.
+Installs the **Adoption Companion** pack — a growing bundle of small, opt-in **companion tips** that help a user adopt and kickstart their assistant. Each tip is self-contained at runtime; the pack is a distribution bundle, not a runtime coupling. Two tips ship today:
 
-The pack is a distribution bundle; each companion tip is self-contained at runtime. This install:
+| Tip | What the user gets | Scope | Toggle |
+|---|---|---|---|
+| **Memory Receipts** | a glanceable `📝 Noted` when the agent saves a durable fact, so they *see* it learn and can correct it in plain chat | one agent group | ships **off** |
+| **Knowledge Inventory** | they ask *"what do you know about me?"* and get a plain-language picture of what the agent tracks, plus an offer to add, fix, or stop tracking anything | every group in the fork | none |
 
-- Appends a managed block (`<!-- adoption:receipts v=1 -->` … `<!-- /adoption:receipts -->`) to the target group's `groups/<id>/instructions.prepend.md`.
-- Ships the block **off** (`Receipts: OFF.`). The user turns it on later by asking in chat.
-- Adds **zero** runtime code — no MCP tools, no hooks, no core changes. The only code is a pure, install-time block helper (`lib/receipts-block.ts`).
+Adds **zero** runtime code — no MCP tools, no hooks, no core changes. The only code is a pure, install-time block helper (`lib/receipts-block.ts`).
 
-> **Why a per-group standing block, not a `container/skills/…` skill?** A receipt must fire mid-turn the moment a fact is saved — that needs *always-in-prompt standing behavior*, whereas a container skill is model-invoked by relevance (it can't guarantee the timing). And receipts are opt-in per user-facing group, while a container skill mounts into **every** group in the fork. So the per-group `instructions.prepend.md` is both the reliable trigger and the correct blast radius.
+## How this install runs — two phases
 
-## Integration tests
+The two tips reach the agent by different mechanisms, so they install at different scopes. Do both phases:
 
-The block's *runtime* behavior (does the agent receipt the right facts, batch, honor the toggle) has **no in-tree integration test** by design — same posture as `add-rtk`. It is a standing-instruction block plus the existing `send_card` tool, so there is no source reach-in a unit test could guard; it is verified behaviorally via the evals in `evals/adoption-receipts/` against a real migrated container.
+- **Steps 1–4 — per agent group.** Memory Receipts is a managed block in that group's `instructions.prepend.md`. Repeat for each user-facing assistant you want it on.
+- **Step 5 — once per fork.** Knowledge Inventory is a container skill under `container/skills/`, which is repo-level: writing it makes the tip available to **every** group at once. Idempotent, so re-running it during a later per-group install is a no-op.
 
-The **exception** is the pure install-time helper (`lib/receipts-block.ts`), which *is* unit-tested: `tests/receipts-block.test.ts`, run by `pnpm run test` (and by CI) via the `.claude/skills/**/tests/*.test.ts` glob in `vitest.config.ts`. Run it after any change to the helper or the block template.
+> **Why they differ.** A receipt must fire **mid-turn**, the moment a fact is saved — only always-in-prompt standing behavior guarantees that timing, and receipts should be opt-in per group, so a per-group block is both the reliable trigger and the correct blast radius. An inventory only ever fires **when the user asks**, so a model-invoked container skill is enough — and being fork-wide is safe, because it cannot interrupt anyone and only ever reveals that agent's own memory.
 
 ## Step 1 — Identify the target agent group
 
@@ -49,7 +51,7 @@ ncl wirings update <wiring-id> --session-mode agent-shared
 These features require the post-#3012 memory model, proven by **two** conditions — check **both**:
 
 ```bash
-GROUP=<group-folder>          # e.g. my-assistant
+GROUP=<group-folder>          # the folder name from `ncl groups list`
 
 # (a) UPDATED: the memory scaffold exists (auto-created on first boot post-#3012)
 test -f "groups/$GROUP/memory/index.md" && echo "index.md: present" || echo "index.md: MISSING"
@@ -65,6 +67,8 @@ The two checks are **not** redundant: the scaffold auto-creates `index.md`, so i
 > *"This group isn't on NanoClaw's new memory system yet. Run **update** + **`/migrate-memory`** for it first, then re-run `/add-adoption-companion`."*
 
 ## Step 3 — Insert the block
+
+Writes a managed block, delimited `<!-- adoption:receipts v=1 -->` … `<!-- /adoption:receipts -->`, into the group's `instructions.prepend.md`. The delimiters are pure markers: they are how this skill finds the block to refresh, and how `REMOVE.md` finds it to strip. Everything between them is the tip's behavior, including the `Receipts: ON/OFF` line the agent reads and edits.
 
 Idempotent: appends the v1 block if absent; if a block already exists, it refreshes the body **and preserves the current `Receipts: ON/OFF` value** (a re-install never flips a user's ON back to OFF). Uses the pure helper — no core code runs.
 
@@ -186,9 +190,9 @@ Receipts are **per-agent-group** (personas don't inherit between groups), so eac
 
 ```bash
 # List groups and their folders, then loop. Review the list first and exclude
-# any non-user-facing groups (builders, researchers, sport/home bots you don't
+# any non-user-facing groups (builders, researchers, and any bot you don't
 # want receipting) by editing GROUPS.
-GROUPS="$(ls groups/)"        # or hand-pick: GROUPS="my-assistant fitness-agent"
+GROUPS="$(ls groups/)"        # or hand-pick: GROUPS="my-assistant my-other-assistant"
 
 for GROUP in $GROUPS; do
   idx="groups/$GROUP/memory/index.md"; loc="groups/$GROUP/CLAUDE.local.md"
@@ -224,11 +228,3 @@ writeFileSync(f, applyReceiptsBlock(readFileSync(f, 'utf8'), { version: 1 }));
 
 **Caveats:** (1) only agents created **via that template** (`ncl groups create --template …`) inherit it — not ones made by `/init-first-agent` or the setup wizard. (2) It blankets **every** agent from that template, so only add it to a **user-facing/assistant** template, never a generic or Builder one (spec #150). (3) It ships `OFF`, same as a direct install.
 
-## Running the behavioral evals later
-
-The `📝 Noted` behavior is verified against a **real migrated container**, not source tests. Scenario files live in `evals/adoption-receipts/B01.md` … `B38.md` (`§B.0` format: `setup` / `steps` / `expect`; B34–B38 cover durable facts embedded in longer task instructions). To run them:
-
-1. Stand up a migrated group with the block installed and `Receipts: ON.` (or `OFF.` for the off-path scenarios).
-2. Drive each scenario's `steps` as user turns on that channel (`card` vs `text`).
-3. Check the observables: number of `send_card`/fallback messages, whether `memory/index.md` changed, and the `Receipts: ON/OFF` line value after the turn. Judge tone (glanceable, plain-language, jargon-free) manually or with an LLM rubric.
-4. Run each scenario k=3–5 times for stability. Pass bars: hard-guarantee categories (toggle, correction, guard, lifecycle) 100%; discrimination/tone ≥90%. Recorded results live in `evals/RESULTS.md`.

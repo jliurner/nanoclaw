@@ -22,7 +22,7 @@ Strips the pack's managed block from one group's standing instructions. Run Step
 Deletes exactly the `<!-- adoption:receipts … -->` … `<!-- /adoption:receipts -->` span from the group's standing instructions. If no marker is present, the file is returned unchanged (**skip-if-absent** — idempotent by construction). Sibling `adoption:*` blocks from other features are left intact.
 
 ```bash
-GROUP=<group-folder>          # e.g. my-assistant
+GROUP=<group-folder>          # the folder name from `ncl groups list`
 FILE="groups/$GROUP/instructions.prepend.md"
 test -f "$FILE" || { echo "no instructions.prepend.md — nothing to remove"; exit 0; }
 
