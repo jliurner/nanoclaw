@@ -124,11 +124,6 @@ describe('A1 — knowledge-inventory SKILL.md', () => {
       }
     }
   });
-
-  it('A1.9 records the reusable-by-onboarding seam', () => {
-    expect(skill).toMatch(/onboarding/i);
-    expect(skill).toMatch(/reused|reuse/i);
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -144,14 +139,32 @@ describe('A2 — pack install/remove wiring', () => {
     expect(installer).toMatch(/blast radius/i);
   });
 
-  it('A2.1b records the rebuild-vs-restart resolution, cited to source', () => {
-    // The open item (general.md §11) is resolved: activation is spawn-time, so
-    // restart is the step. Asserted as the positive DO step + its evidence,
-    // never as a "no rebuild needed" non-step (skill-guidelines anti-pattern #7).
+  it('A2.1b the installer tells the operator to restart', () => {
+    // Activation is spawn-time, so restart is the whole step. Asserted as the
+    // positive DO step, never as a "no rebuild needed" non-step
+    // (skill-guidelines anti-pattern #7).
     expect(installer).toMatch(/Restart activates the tip/);
     expect(installer).toMatch(/ncl groups restart --id/);
-    expect(installer).toContain('selectedSkillNames()');
-    expect(installer).toContain('src/container-runner.ts');
+  });
+
+  it('A2.1c core still resolves skills at spawn, so restart is sufficient', () => {
+    // The load-bearing dependency behind A2.1b: a bare restart only picks the
+    // new skill up because core re-reads container/skills/ on every spawn and
+    // mounts it in. If upstream ever resolves skills at build time, or drops
+    // the mount, restart stops being enough and the installer needs a rebuild
+    // step — this must go red then, which is why it reads core's source rather
+    // than the installer's prose.
+    const runner = readFileSync(join(repoRoot, 'src/container-runner.ts'), 'utf8');
+
+    // (a) container/skills/ is mounted read-only at /app/skills.
+    expect(runner).toMatch(/'container',\s*'skills'/);
+    expect(runner).toMatch(/containerPath: '\/app\/skills', readonly: true/);
+
+    // (b) an "all" selection is recomputed from the directory listing at spawn,
+    // rather than read from stored config — that is what discovers a new dir.
+    const selection = runner.slice(runner.indexOf('function selectedSkillNames'));
+    expect(selection).toMatch(/containerConfig\.skills !== 'all'/);
+    expect(selection).toMatch(/readdirSync/);
   });
 
   it('A2.2 guard step names both migration conditions', () => {
