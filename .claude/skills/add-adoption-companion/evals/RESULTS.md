@@ -11,7 +11,7 @@ Two layers, per the Memory Receipts design spec: deterministic **static tests**
 Deterministic, no LLM. Gate merges.
 
 ```bash
-vitest run --config vitest.skills.config.ts
+pnpm run test
 ```
 
 `tests/receipts-block.test.ts` covers:
@@ -109,7 +109,7 @@ Against §C: hard-guarantee categories (off-silent, no-block, correction-updates
 
 ```bash
 # Static (always)
-vitest run --config vitest.skills.config.ts
+pnpm run test
 
 # Behavioral (isolated harness)
 # 1. ncl groups create --folder eval-scratch --name "Eval Scratch"

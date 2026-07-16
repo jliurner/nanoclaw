@@ -19,7 +19,7 @@ The pack is a distribution bundle; each companion tip is self-contained at runti
 
 The block's *runtime* behavior (does the agent receipt the right facts, batch, honor the toggle) has **no in-tree integration test** by design — same posture as `add-rtk`. It is a standing-instruction block plus the existing `send_card` tool, so there is no source reach-in a unit test could guard; it is verified behaviorally via the evals in `evals/adoption-receipts/` against a real migrated container.
 
-The **exception** is the pure install-time helper (`lib/receipts-block.ts`), which *is* unit-tested: `tests/receipts-block.test.ts`, run with `vitest run --config vitest.skills.config.ts`. Run it after any change to the helper or the block template.
+The **exception** is the pure install-time helper (`lib/receipts-block.ts`), which *is* unit-tested: `tests/receipts-block.test.ts`, run by `pnpm run test` (and by CI) via the `.claude/skills/**/tests/*.test.ts` glob in `vitest.config.ts`. Run it after any change to the helper or the block template.
 
 ## Step 1 — Identify the target agent group
 

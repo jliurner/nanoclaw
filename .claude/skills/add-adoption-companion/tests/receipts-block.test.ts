@@ -4,7 +4,7 @@
  * Design spec §A1 (block-template invariants), §A2 (helper unit tests),
  * §A3 (skill wiring). Deterministic, never calls an LLM.
  *
- * Run: vitest run --config vitest.skills.config.ts
+ * Run: pnpm run test
  */
 import fs from 'fs';
 import path from 'path';
