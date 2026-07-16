@@ -95,13 +95,90 @@ Standing-instruction changes apply on the next container spawn.
 ncl groups restart --id <group-id>
 ```
 
+## Step 5 — Fork-level: install the Knowledge Inventory tip (once per fork)
+
+The pack has **two install scopes**. Steps 1–4 above are **per-group** (Memory Receipts is a standing block in one group's persona). This step is **fork-level**: Knowledge Inventory is a container skill under `container/skills/`, which is repo-level — writing it makes it available to **every** agent group in this fork at once. Run it once per fork; it is idempotent, so running it again on a later per-group install is a no-op.
+
+Knowledge Inventory is **reactive**: when the user asks *"what do you know about me?"*, the agent shows a plain-language picture of what it tracks — categories, counts, a few examples — and offers to add, fix, or stop tracking anything. It has **no toggle**: a feature that only ever answers when asked can't bother anyone, so fork-wide availability is intentional and safe (it only ever reveals that agent's own memory).
+
+### 5a — Guard
+
+Same two conditions as Step 2 — the tip reads the new memory model. Check the group(s) you're installing for:
+
+```bash
+GROUP=<group-folder>
+test -f "groups/$GROUP/memory/index.md" && echo "index.md: present" || echo "index.md: MISSING"
+if [ -s "groups/$GROUP/CLAUDE.local.md" ]; then echo "CLAUDE.local.md: residual content — NOT migrated"; else echo "CLAUDE.local.md: clean"; fi
+```
+
+**If either fails, STOP** — do not install. Same operator message as Step 2:
+
+> *"This group isn't on NanoClaw's new memory system yet. Run **update** + **`/migrate-memory`** for it first, then re-run `/add-adoption-companion`."*
+
+### 5b — Ensure the skill directory is present
+
+`container/skills/knowledge-inventory/SKILL.md` is the canonical copy and ships with this fork, so on a normal install it is already in place and this step confirms it. Restore it from git when it is absent — a fork-level uninstall (`REMOVE.md` Part B) deletes it, and this is the path that brings it back. Idempotent: present → confirm and move on; absent → restore.
+
+```bash
+if [ -f container/skills/knowledge-inventory/SKILL.md ]; then
+  echo "knowledge-inventory: already present"
+else
+  mkdir -p container/skills/knowledge-inventory
+  git show HEAD:container/skills/knowledge-inventory/SKILL.md > container/skills/knowledge-inventory/SKILL.md
+  echo "knowledge-inventory: restored"
+fi
+```
+
+Git is the single source for this file. An update is `git show HEAD:<path> > <path>` again — the tracked copy is canonical, there is no second copy to keep in sync, and no per-user state to preserve.
+
+### 5c — Activate: restart the group
+
+**Restart activates the tip.** Groups also pick it up on their next message.
+
+```bash
+ncl groups restart --id <group-id>
+```
+
+Restart is sufficient because activation is resolved entirely at spawn: `container/skills/` is bind-mounted read-only at `/app/skills` (`src/container-runner.ts:342-344`), and skill selection defaults to `"all"` (`src/db/migrations/014-container-configs.ts:17`), which `selectedSkillNames()` recomputes from the directory listing on every spawn (`src/container-runner.ts:420-431`) — so a newly added directory is discovered and symlinked into the group's skills dir automatically.
+
+**One caveat — explicit skill lists.** `selectedSkillNames()` only rescans the directory when a group's skill selection is `"all"`; an explicit array is returned verbatim (`src/container-runner.ts:420-431`). So a group pinning a list never gets a symlink for the new skill and **silently** never invokes it — the files are mounted, but invisible to the agent.
+
+This is rare: the column defaults to `"all"` and no `ncl` verb sets it otherwise (`config update` is scalars only). The one path that produces an explicit list is `src/backfill-container-configs.ts:62`, migrating a **legacy v1 `container.json`** that hand-picked skills. A fresh v2 group can't be in this state — check anyway if this fork came from v1:
+
+```bash
+ncl groups config get --id <group-id> | grep -i skills   # "all" → nothing to do
+```
+
+If it's an array, append the name. There is no `ncl` verb for this (skills is a JSON column; only `mcp_servers` and `packages_*` have add/remove verbs), so write it directly. The `json_type` + `NOT EXISTS` guards make this safe to re-run and a no-op on `"all"` rows:
+
+```bash
+pnpm exec tsx scripts/q.ts data/v2.db \
+  "UPDATE container_configs
+   SET skills = json_insert(skills, '\$[#]', 'knowledge-inventory')
+   WHERE agent_group_id = '<group-id>'
+     AND json_type(skills) = 'array'
+     AND NOT EXISTS (SELECT 1 FROM json_each(container_configs.skills) WHERE value = 'knowledge-inventory')"
+```
+
+Then restart that group. (Use `scripts/q.ts`, not the `sqlite3` CLI — setup never installs that binary; see `setup/verify.ts:5`.)
+
+### 5d — Report the fork-level blast radius
+
+Do not let this scope be a surprise. See the Report section below.
+
 ## Report
 
-Tell the operator:
+Tell the operator — **both scopes**, explicitly:
 
+**Per-group (Memory Receipts):**
 - Memory receipts are **installed and OFF** on `groups/<id>/`.
 - The **user** enables it by asking in chat (e.g. *"tell me when you learn something about me"*); the agent flips the block to `Receipts: ON.` The user turns it off the same way (*"stop telling me what you learned"*).
 - Off ≠ uninstall — memory keeps working; only the surfacing stops. Full removal is `REMOVE.md`.
+
+**Fork-level (Knowledge Inventory):**
+- Knowledge Inventory is now available to **all assistants in this fork** (newly installed / already present — say which). This is by design: it only answers when asked, and only about that agent's own memory.
+- There is **no toggle** and nothing for the user to enable — they can just ask *"what do you know about me?"*.
+- It is **not** removed when you remove the pack from a single group (other groups may still use it). Only a full uninstall deletes it — see `REMOVE.md`.
 
 ## Optional — install across all existing groups at once
 
