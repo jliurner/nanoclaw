@@ -13,6 +13,15 @@ export const RECEIPTS_VERSION = 1;
 
 type State = 'ON' | 'OFF';
 
+/**
+ * State a fresh install ships with. ON: installing the pack IS the opt-in —
+ * an operator ran `/add-adoption-companion` for this tip, so landing OFF would
+ * mean the feature they asked for does nothing until they discover a phrase to
+ * turn it on. Also the fallback when an existing block's state line is
+ * unreadable: unknown resolves to the shipped default, never to silence.
+ */
+const DEFAULT_STATE: State = 'ON';
+
 const OPEN_RE = /<!-- adoption:receipts v=\d+ -->/g;
 const CLOSE_RE = /<!-- \/adoption:receipts -->/g;
 const BLOCK_RE = /<!-- adoption:receipts v=\d+ -->[\s\S]*?<!-- \/adoption:receipts -->/g;
@@ -63,17 +72,18 @@ function assertBalanced(text: string): void {
   }
 }
 
-/** Read the current ON/OFF value from the first block; default OFF (never silently ON). */
+/** Read the current ON/OFF value from the first block; no readable value → DEFAULT_STATE. */
 function extractState(text: string): State {
   const block = text.match(/<!-- adoption:receipts v=\d+ -->[\s\S]*?<!-- \/adoption:receipts -->/)?.[0];
-  if (!block) return 'OFF';
+  if (!block) return DEFAULT_STATE;
   const m = block.match(/\*\*Receipts:\s*(ON|OFF)\b/i);
-  return m ? (m[1].toUpperCase() as State) : 'OFF';
+  return m ? (m[1].toUpperCase() as State) : DEFAULT_STATE;
 }
 
 /**
  * Install or refresh the receipts block. Idempotent: existing block(s) are
  * removed and one fresh block is appended, preserving the current ON/OFF state.
+ * A fresh install (no prior block) ships DEFAULT_STATE.
  */
 export function applyReceiptsBlock(text: string, opts?: { version?: number }): string {
   assertBalanced(text);

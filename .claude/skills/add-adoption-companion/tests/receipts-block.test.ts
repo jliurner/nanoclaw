@@ -41,8 +41,9 @@ describe('A1 — block-template invariants', () => {
     expect(Number(marker![1])).toBe(RECEIPTS_VERSION);
   });
 
-  it('A1.3 default state line is exactly **Receipts: OFF.**', () => {
+  it('A1.3 rendered state line is exactly **Receipts: <state>.**', () => {
     expect(block).toContain('**Receipts: OFF.**');
+    expect(renderReceiptsBlock(RECEIPTS_VERSION, 'ON')).toContain('**Receipts: ON.**');
   });
 
   it('A1.4 guard clause present', () => {
@@ -94,7 +95,11 @@ describe('A2 — apply/remove helper', () => {
     expect(markerCount(out)).toBe(1);
     expect(out).toContain('You are Nano, a helpful assistant.');
     expect(out).toContain('## Tone\nBe terse.');
-    expect(out).toContain('**Receipts: OFF.**');
+  });
+
+  it('A2.1b fresh install ships ON — installing the tip is the opt-in', () => {
+    expect(applyReceiptsBlock('persona\n', { version: 1 })).toContain('**Receipts: ON.**');
+    expect(applyReceiptsBlock('', { version: 1 })).toContain('**Receipts: ON.**');
   });
 
   it('A2.2 apply twice is idempotent (byte-identical, no duplicate)', () => {
@@ -106,31 +111,28 @@ describe('A2 — apply/remove helper', () => {
   });
 
   it('A2.3 update v1→v2 preserves ON', () => {
-    const v1 = applyReceiptsBlock('persona\n', { version: 1 }).replace(
-      '**Receipts: OFF.**',
-      '**Receipts: ON.**',
-    );
+    const v1 = `persona\n\n${renderReceiptsBlock(1, 'ON')}\n`;
     const v2 = applyReceiptsBlock(v1, { version: 2 });
     expect(v2).toContain('<!-- adoption:receipts v=2 -->');
     expect(v2).toContain('**Receipts: ON.**');
     expect(markerCount(v2)).toBe(1);
   });
 
-  it('A2.4 update v1→v2 preserves OFF', () => {
-    const v1 = applyReceiptsBlock('persona\n', { version: 1 });
+  it('A2.4 update v1→v2 preserves a user OFF — a re-install never flips it back on', () => {
+    const v1 = `persona\n\n${renderReceiptsBlock(1, 'OFF')}\n`;
     const v2 = applyReceiptsBlock(v1, { version: 2 });
     expect(v2).toContain('<!-- adoption:receipts v=2 -->');
     expect(v2).toContain('**Receipts: OFF.**');
+    expect(v2).not.toContain('**Receipts: ON.**');
   });
 
-  it('A2.5 garbled state line on update defaults safely to OFF', () => {
-    const garbled = applyReceiptsBlock('persona\n', { version: 1 }).replace(
+  it('A2.5 garbled state line on update falls back to the shipped default (ON)', () => {
+    const garbled = renderReceiptsBlock(1, 'OFF').replace(
       '**Receipts: OFF.**  (Flip',
       '**Receipts: MAYBE.**  (Flip',
     );
-    const out = applyReceiptsBlock(garbled, { version: 2 });
-    expect(out).toContain('**Receipts: OFF.**');
-    expect(out).not.toContain('**Receipts: ON.**');
+    const out = applyReceiptsBlock(`persona\n\n${garbled}\n`, { version: 2 });
+    expect(out).toContain('**Receipts: ON.**');
   });
 
   it('A2.6 apply to empty / whitespace-only file: written, no crash', () => {

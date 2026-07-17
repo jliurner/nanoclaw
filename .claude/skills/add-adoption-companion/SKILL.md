@@ -1,6 +1,6 @@
 ---
 name: add-adoption-companion
-description: Install the Adoption Companion pack — a growing bundle of opt-in "companion tips" that help a user adopt and kickstart their assistant. Ships two tips. Memory Receipts drops a light "📝 Noted" when the agent learns a durable fact, per agent group, off until the user asks for it. Knowledge Inventory answers "what do you know about me?" with a plain-language picture of what the agent tracks, available to every group. Zero runtime code, reversible.
+description: Install the Adoption Companion pack — a growing bundle of opt-in "companion tips" that help a user adopt and kickstart their assistant. Ships two tips. Memory Receipts drops a light "📝 Noted" when the agent learns a durable fact, per agent group, on from install and off whenever the user says stop. Knowledge Inventory answers "what do you know about me?" with a plain-language picture of what the agent tracks, available to every group. Zero runtime code, reversible.
 ---
 
 # Add Adoption Companion pack
@@ -9,7 +9,7 @@ Installs the **Adoption Companion** pack — a growing bundle of small, opt-in *
 
 | Tip | What the user gets | Scope | Toggle |
 |---|---|---|---|
-| **Memory Receipts** | a glanceable `📝 Noted` when the agent saves a durable fact, so they *see* it learn and can correct it in plain chat | one agent group | ships **off** |
+| **Memory Receipts** | a glanceable `📝 Noted` when the agent saves a durable fact, so they *see* it learn and can correct it in plain chat | one agent group | ships **on**; user can turn it off in chat |
 | **Knowledge Inventory** | they ask *"what do you know about me?"* and get a plain-language picture of what the agent tracks, plus an offer to add, fix, or stop tracking anything | every group in the fork | none |
 
 Adds **zero** runtime code — no MCP tools, no hooks, no core changes. The only code is a pure, install-time block helper (`lib/receipts-block.ts`).
@@ -59,7 +59,9 @@ The two checks are **not** redundant: the scaffold auto-creates `index.md`, so i
 
 Writes a managed block, delimited `<!-- adoption:receipts v=1 -->` … `<!-- /adoption:receipts -->`, into the group's `instructions.prepend.md`. The delimiters are pure markers: they are how this skill finds the block to refresh, and how `REMOVE.md` finds it to strip. Everything between them is the tip's behavior, including the `Receipts: ON/OFF` line the agent reads and edits.
 
-Idempotent: appends the v1 block if absent; if a block already exists, it refreshes the body **and preserves the current `Receipts: ON/OFF` value** (a re-install never flips a user's ON back to OFF). Uses the pure helper — no core code runs.
+A fresh install ships **`Receipts: ON`** — installing this tip *is* the opt-in, so it works from the first message rather than waiting for the user to discover a phrase that turns it on.
+
+Idempotent: appends the v1 block if absent; if a block already exists, it refreshes the body **and preserves the current `Receipts: ON/OFF` value** (a re-install never flips a user's OFF back to ON, or their ON back to OFF). Uses the pure helper — no core code runs.
 
 ```bash
 FILE="groups/$GROUP/instructions.prepend.md"
@@ -73,11 +75,11 @@ writeFileSync(f, applyReceiptsBlock(readFileSync(f, 'utf8'), { version: 1 }));
 " "$FILE"
 ```
 
-Verify the block landed once, off:
+Verify the block landed once, on:
 
 ```bash
 grep -c 'adoption:receipts v=1' "$FILE"   # expect 1
-grep 'Receipts:' "$FILE"                  # expect **Receipts: OFF.** on a fresh install
+grep 'Receipts:' "$FILE"                  # expect **Receipts: ON.** on a fresh install
 ```
 
 ## Step 4 — Restart the group so the new persona takes effect
@@ -172,9 +174,10 @@ Do not let this scope be a surprise. See the Report section below.
 Tell the operator — **both scopes**, explicitly:
 
 **Per-group (Memory Receipts):**
-- Memory receipts are **installed and OFF** on `groups/<id>/`.
-- The **user** enables it by asking in chat (e.g. *"tell me when you learn something about me"*); the agent flips the block to `Receipts: ON.` The user turns it off the same way (*"stop telling me what you learned"*).
+- Memory receipts are **installed and ON** on `groups/<id>/` — the user will start seeing `📝 Noted` as soon as the agent saves a durable fact.
+- The **user** turns it off by asking in chat (e.g. *"stop telling me what you learned"*); the agent flips the block to `Receipts: OFF.` They turn it back on the same way (*"tell me when you learn something about me"*).
 - Off ≠ uninstall — memory keeps working; only the surfacing stops. Full removal is `REMOVE.md`.
+- A re-install preserves whatever the user chose; it never flips their OFF back on.
 
 **Fork-level (Knowledge Inventory):**
 - Knowledge Inventory is now available to **all assistants in this fork** (newly installed / already present — say which). This is by design: it only answers when asked, and only about that agent's own memory.
@@ -203,11 +206,13 @@ import { applyReceiptsBlock } from '${CLAUDE_SKILL_DIR}/lib/receipts-block.ts';
 const f = process.argv[process.argv.length - 1];
 writeFileSync(f, applyReceiptsBlock(readFileSync(f, 'utf8'), { version: 1 }));
 " "$FILE"
-  echo "OK   $GROUP — installed OFF"
+  echo "OK   $GROUP — installed ON"
 done
 ```
 
-Every group ships `OFF`; users opt in per group. Re-running preserves each group's existing ON/OFF (idempotent). Restart each group (or let it restart on next message) to pick up the persona.
+Every group ships `ON`; each user can turn their own off in chat. Re-running preserves each group's existing ON/OFF (idempotent). Restart each group (or let it restart on next message) to pick up the persona.
+
+Because this lands ON, the loop is a **live behavior change for every group it touches** — review the list before running it, and keep it to groups whose users you'd want receipting today.
 
 ## Optional — inherit into newly created agents (template)
 
@@ -223,5 +228,5 @@ writeFileSync(f, applyReceiptsBlock(readFileSync(f, 'utf8'), { version: 1 }));
 " "$TPL"
 ```
 
-**Caveats:** (1) only agents created **via that template** (`ncl groups create --template …`) inherit it — not ones made by `/init-first-agent` or the setup wizard. (2) It blankets **every** agent from that template, so only add it to a **user-facing/assistant** template, never a generic or Builder one. (3) It ships `OFF`, same as a direct install.
+**Caveats:** (1) only agents created **via that template** (`ncl groups create --template …`) inherit it — not ones made by `/init-first-agent` or the setup wizard. (2) It blankets **every** agent from that template, so only add it to a **user-facing/assistant** template, never a generic or Builder one. (3) It ships `ON`, same as a direct install — every future agent from that template receipts from its first message until its user says stop.
 

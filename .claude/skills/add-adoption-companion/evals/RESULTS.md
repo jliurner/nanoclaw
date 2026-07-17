@@ -2,11 +2,11 @@
 
 Validation record for the **Memory Receipts** companion tip (Adoption Companion pack).
 Two layers, per the Memory Receipts design spec: deterministic **static tests**
-(CI) and non-deterministic **behavioral evals** (live container). Last run: 2026-07-16.
+(CI) and non-deterministic **behavioral evals** (live container). Last run: 2026-07-17.
 
 ---
 
-## A. Static tests — 25/25 PASS ✅
+## A. Static tests — 26/26 PASS ✅
 
 Deterministic, no LLM. Gate merges.
 
@@ -18,11 +18,11 @@ pnpm run test
 
 | Group | Cases | What it asserts |
 |---|---|---|
-| **A1** block template | A1.1–A1.7 | balanced markers, version agreement, default `Receipts: OFF.`, guard clause, toggle instructions, cold-turn clause, no jargon in user-facing example strings |
-| **A2** apply/remove helper | A2.1–A2.12 | append-once, idempotent, v-bump preserves ON/OFF, garbled→OFF, empty file, exact removal, sibling blocks intact, malformed→throw, CRLF, de-dupe |
+| **A1** block template | A1.1–A1.7 | balanced markers, version agreement, `Receipts:` line renders the given state, guard clause, toggle instructions, cold-turn clause, no jargon in user-facing example strings |
+| **A2** apply/remove helper | A2.1–A2.12 | append-once, fresh install ships ON, idempotent, v-bump preserves ON/OFF, garbled→ship default, empty file, exact removal, sibling blocks intact, malformed→throw, CRLF, de-dupe |
 | **A3** skill wiring | A3.1–A3.6 | SKILL has guard/insert/report steps, both guard conditions named, `ncl groups list` + per-group note, REMOVE targets markers + skip-if-absent, Integration-tests note, markers match template |
 
-**Result:** 25 passed / 25.
+**Result:** 26 passed / 26.
 
 ---
 
@@ -115,7 +115,7 @@ pnpm run test
 # 1. ncl groups create --folder eval-scratch --name "Eval Scratch"
 # 2. ncl wirings create --messaging-group-id <cli-mg> --agent-group-id <scratch-id>
 # 3. pnpm run chat "boot"            # scaffolds memory/index.md
-# 4. install the block (see SKILL.md Step 3), set Receipts: ON., restart the group
+# 4. install the block (see SKILL.md Step 3 — ships Receipts: ON.), restart the group
 # 5. drive scenarios: pnpm run chat "<scenario message>"
 # 6. observe: scripts/q.ts <outbound.db> "SELECT seq,content FROM messages_out ..."
 # 7. teardown: ncl wirings delete / ncl groups delete / rm -rf groups/eval-scratch
